@@ -20,41 +20,59 @@ library(tidyverse)   # includes ggplot2
 library(hrbrthemes)  # better chart appearance
 library(viridis)     # better color palette
 library(plotly)      # interactive charts
-#library(gridExtra)
-# The dataset is provided in the gapminder library
-library(gapminder)
+library(partykit)    # includes analysis for conditional inference trees
 ```
 
 ## Data wrangling
 *** 
 
-Let's keep data for 2007 only
+Load all the data we are going to look at - in this case all back rows through testing in the last 5 years, completing both CMJ, reactive strength & speed testing.
+
+A rough summary of the data can be viewed below:
 
 ```{r}
-data <- gapminder %>% filter(year=="2007") %>% select(-year)
+back_row_data <- read.csv("data/data.csv")
+
+head(back_row_data)
 ```
 
 
 ## Let's build a chart
 *** 
 
-Build the chart with ggplot2, make it interactive with plotly.
+It's nice to see the data visually to get a hold on what it contains, in this case it might be interesting to look at whether relative peak power output, measured by CMJ, has any correlation to 10m sprint time.
 
+We can make this interactive, so the data can be further explored.
 
 ```{r}
-# Interactive version
-p <- data %>%
-  mutate(gdpPercap=round(gdpPercap,0)) %>%
-  mutate(pop=round(pop/1000000,2)) %>%
-  mutate(lifeExp=round(lifeExp,1)) %>%
-  arrange(desc(pop)) %>%
-  mutate(country = factor(country, country)) %>%
-  mutate(text = paste("Country: ", country, "\nPopulation (M): ", pop, "\nLife Expectancy: ", lifeExp, "\nGdp per capita: ", gdpPercap, sep="")) %>%
-  ggplot( aes(x=gdpPercap, y=lifeExp, size = pop, color = continent, text=text)) +
-    geom_point(alpha=0.7) +
-    scale_size(range = c(1.4, 19), name="Population (M)") +
-    scale_color_viridis(discrete=TRUE, guide=FALSE) +
-    theme_ipsum() +
-    theme(legend.position="none")
-ggplotly(p, tooltip="text")
+# Interactive scatter plot - PPO vs 10m Sprint
+p <- back_row_data %>%
+  mutate(text = paste("Name: ", name, "\nBody Weight (KG): ", body_weight, "\nPeak Power (W): ", peak_power, sep = "")) %>%
+  ggplot( aes(x = rel_power, y = time_10, text = text)) +
+  geom_point(alpha = 0.7) +
+  theme_ipsum() +
+  theme(legend.position = "none")
+ggplotly(p, tooltip = "text")
+```
+
+## Further exploration
+
+Relative power output also nicely predicts which speed band athletes will fall into:
+
+```{r, results = FALSE}
+## conditional inference tree on max velocity using relative power
+max_v <- back_row_data$max_v
+
+cut(max_v, 3, include_lowest = T, labels = c("Slow", "Average", "Fast"))
+
+back_row_data <- back_row_data %>%
+  mutate(
+    speed = cut(time_10, 3, include_lowest = T, labels = c("Fast", "Medium", "Slow"))
+  )
+
+ctree_formula <- speed ~ rel_power
+
+speed_ctree <- ctree(ctree_formula, data = back_row_data)
+
+plot(speed_ctree)
 ````
